@@ -1,0 +1,9 @@
+output.mp3
+ffmpeg
+video.mp4
+transcript.json
+img_blocks.json
+imgs/*
+demos/*
+celestia
+.env

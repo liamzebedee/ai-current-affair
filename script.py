@@ -1,0 +1,2 @@
+prompt1 = """Write a Rick and Morty script about this news article. The script should be witty and include the buildup to one joke. Don't make repeated jokes every line, add some spacing to allow it to build up a bit. """
+prompt2 = """Convert the substance of this Rick and Morty script into a youtube explainer by a single aussie character who is kinda like steve irwin. You can retain the humour but retell mostly the facts."""

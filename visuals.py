@@ -85,7 +85,7 @@ def get_image_queries_2():
         for block in annot_sentence_blocks:
             subject = block["text"]
 
-            prompt = f"I want you to help me make a youtube video. The video should basically have an image every 1s or so to keep the viewer engaged. Please read this voiceover and then output a one-line search query for visuals, no formatting. Example: luxury boat.\n\nVoiceover: {subject}"
+            prompt = f"I want you to help me make a youtube video. The video should basically have an image every 1s or so to keep the viewer engaged. Please read this voiceover and then output a one-line search query for visuals, no formatting. \n\nExample:\nVoiceover: we're riding out at sea\nOutput: luxury boat.\n\nVoiceover: {subject}"
 
             # call chatgpt
             openai = OpenAI()
@@ -102,9 +102,13 @@ def get_image_queries_2():
             print(one_line_search_qs)
 
             block["image_query"] = one_line_search_qs
+
+            fnames = download_img(block["image_query"], n=3)
+            print("fnames: ", fnames)
+            block["image_paths"] = fnames
+            print(annot_sentence_blocks)
         
         # now download all images one by one and save them in imgs
-
         search_images("black swan")
 
         # executor = ProcessPoolExecutor(max_workers=8)
@@ -117,15 +121,89 @@ def get_image_queries_2():
         # for i, block in enumerate(annot_sentence_blocks):
         #     block["image_paths"] = image_2d_results[i]
 
-        for block in annot_sentence_blocks:
-            fnames = download_img(block["image_query"], n=3)
-            block["image_paths"] = fnames
+        # for block in annot_sentence_blocks:
+        #     fnames = download_img(block["image_query"], n=3)
+        #     block["image_paths"] = fnames
         
         # dump this info to a json file
         with open("img_blocks.json", "w") as f:
             f.write(json.dumps(annot_sentence_blocks))
             
 
+
+
+
+def download_img(query, n=3):
+    urls = []
+    try:
+        urls = search_images(query)
+    except:
+        return []
+    i = 0
+
+    fnames = []
+
+    while 0 < len(urls):
+        url_candidate = urls.pop(0)
+
+        try:
+            print(f"img {i} url: {url_candidate}")
+            img = requests.get(url_candidate)
+        except:
+            continue
+
+        # check status code
+        if img.status_code != 200:
+            continue
+
+        # detect ext
+        ext = img.headers['Content-Type'].split("/")[1]
+        print(ext)
+
+        # save as {index}_{query} with the extension given in the response
+        # shorten query to 24 chars
+        # normalise query to a-Z with spaces
+        query = ''.join(e for e in query.lower() if e.isalnum() or e.isspace())
+        query = query[:16]
+        fname = f"imgs/{i}_{query}.{ext}"
+        with open(fname, "wb") as f:
+            f.write(img.content)
+        
+        fnames.append(fname)
+        i += 1
+
+        if i >= n:
+            break
+
+    return fnames
+
+
+
+
+# get_image_queries("""Oi, listen up, mates! Sam Altman from OpenAI's gone off the deep end, reckon he's after a swag of cash bigger than a croc's appetite – we're talking trillions, not just a few shrimp on the barbie! This bloke's chattin' up investors left and right, even had a yarn with the bigwigs over in the United Arab Emirates. Picture this: he's dreaming of a tech bonanza that's gonna need a cheeky $7 trillion! You could buy a whole lot of snags and beers with that, I tell ya.
+
+# So, what's this grand plan? Sammy wants to chuck up heaps of chip foundries faster than a kangaroo on a hot tin roof, and get the old hands at it, like Taiwan Semiconductor Manufacturing Company, to run the show. Why? 'Cause he's hit a snag with not enough chips to power his AI toys like ChatGPT. He reckons it's a bigger drought than the Nullarbor.
+
+# And get this, he's not just spinning yarns at the pub. He's been hobnobbing with top dogs from TSMC, the U.S. Secretary of Commerce, and even SoftBank's big cheese. All while countries are scrambling like a mob of emus to pump out their own chips, but still, the big boys like TSMC and NVIDIA are holding the fort.
+
+# OpenAI, backed by the mighty Microsoft, is keeping mum, but they've whispered they're keen as mustard to boost the global tech BBQ. And Sam Altman, he's the larrikin leading the charge, bouncing back from getting the boot like a true blue Aussie battler.
+
+# So, to wrap it up: Sam's after a treasure chest so big it'd make Blackbeard blush, aiming to turn the AI world upside down. It's a wild ride, but if anyone can wrangle this croc, it's our mate Sam. Let's just hope he doesn't end up a few kangaroos loose in the top paddock!""")
+
+get_image_queries_2()
+
+
+
+
+
+
+
+
+
+# old
+
+
+"""
 
 
 
@@ -158,81 +236,5 @@ def get_image_queries(subject):
 
     return parsed_qs
 
-def download_img(query, n=3):
-    urls = search_images(query)
-    i = 0
 
-    fnames = []
-
-    while len(urls) > 0:
-        url_candidate = urls.pop(0)
-
-        try:
-            print(f"img {i} url: {url_candidate}")
-            img = requests.get(url_candidate)
-        except:
-            continue
-
-        # check status code
-        if img.status_code != 200:
-            continue
-
-        # detect ext
-        ext = img.headers['Content-Type'].split("/")[1]
-        print(ext)
-
-        # save as {index}_{query} with the extension given in the response
-        # shorten query to 24 chars
-        query = query[:16]
-        fname = f"imgs/{i}_{query}.{ext}"
-        with open(fname, "wb") as f:
-            f.write(img.content)
-        
-        fnames.append(fname)
-        i += 1
-
-        if i >= n:
-            break
-
-    return fnames
-
-def download_images(parsed_qs):
-    # search for images
-    for query in parsed_qs:
-        i = 0
-        urls = search_images(query)
-        
-        while len(urls) > 0:
-            url_candidate = urls.pop(0)
-
-            img = requests.get(url_candidate)
-            print(f"img {i} url: {url_candidate}")
-
-            # check status code
-            if img.status_code != 200:
-                continue
-
-            # detect ext
-            ext = img.headers['Content-Type'].split("/")[1]
-            print(ext)
-
-            # save as {index}_{query} with the extension given in the response
-            with open(f"imgs/{i}_{query}.{ext}", "wb") as f:
-                f.write(img.content)
-        
-        i += 1
-
-
-
-
-# get_image_queries("""Oi, listen up, mates! Sam Altman from OpenAI's gone off the deep end, reckon he's after a swag of cash bigger than a croc's appetite – we're talking trillions, not just a few shrimp on the barbie! This bloke's chattin' up investors left and right, even had a yarn with the bigwigs over in the United Arab Emirates. Picture this: he's dreaming of a tech bonanza that's gonna need a cheeky $7 trillion! You could buy a whole lot of snags and beers with that, I tell ya.
-
-# So, what's this grand plan? Sammy wants to chuck up heaps of chip foundries faster than a kangaroo on a hot tin roof, and get the old hands at it, like Taiwan Semiconductor Manufacturing Company, to run the show. Why? 'Cause he's hit a snag with not enough chips to power his AI toys like ChatGPT. He reckons it's a bigger drought than the Nullarbor.
-
-# And get this, he's not just spinning yarns at the pub. He's been hobnobbing with top dogs from TSMC, the U.S. Secretary of Commerce, and even SoftBank's big cheese. All while countries are scrambling like a mob of emus to pump out their own chips, but still, the big boys like TSMC and NVIDIA are holding the fort.
-
-# OpenAI, backed by the mighty Microsoft, is keeping mum, but they've whispered they're keen as mustard to boost the global tech BBQ. And Sam Altman, he's the larrikin leading the charge, bouncing back from getting the boot like a true blue Aussie battler.
-
-# So, to wrap it up: Sam's after a treasure chest so big it'd make Blackbeard blush, aiming to turn the AI world upside down. It's a wild ride, but if anyone can wrangle this croc, it's our mate Sam. Let's just hope he doesn't end up a few kangaroos loose in the top paddock!""")
-
-get_image_queries_2()
+"""

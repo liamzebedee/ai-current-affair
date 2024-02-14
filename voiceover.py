@@ -30,6 +30,10 @@ data = {
 
 response = requests.post(url, json=data, headers=headers)
 # print response output
+if response.status_code != 200:
+    print(f"Error: {response.status_code}")
+    print(response.text)
+    exit(1)
 
 with open('output.mp3', 'wb') as f:
     for chunk in response.iter_content(chunk_size=CHUNK_SIZE):

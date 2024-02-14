@@ -5,34 +5,18 @@ import random
 
 import PIL
 
-# Directory containing your images
-img_dir = "imgs/"
-
-# Get a list of all PNG, JPG, and JPEG files in the directory
-image_files = glob(os.path.join(img_dir, "*.*"))
-
-# filter anything not png, jpg, jpeg
-image_files = [f for f in image_files if f.endswith(".png") or f.endswith(".jpg") or f.endswith(".jpeg")]
-
-# sort by date
-image_files.sort(key=os.path.getmtime)
-
-print(image_files)
-
-
 
 
 # Voiceover
 audio = AudioFileClip("output.mp3")
 audio.set_start(0)
+
+# turn up 2x volume on the audio
+audio = audio.volumex(13.4) # 2x volume, elevenlabs is quietttt
+
 print(f"Audio duration: {audio.duration}")
 
-image_duration = audio.duration / len(image_files)
 
-
-# Image clips
-# image_clips = []
-# text_clips = []
 
 all_clips = []
 current_time = 0
@@ -51,80 +35,48 @@ for block in blocks:
     dur = end - start
 
     # get the image path
-    image_path = block["image_paths"][0]
-    # TODO UPDATE image_path to image_paths
+    image_paths = block["image_paths"]
+
+    img_length = dur / len(image_paths)
+    print(f"img_length: {img_length}")
+    for i, image_path in enumerate(image_paths):
+        clip_start = start + i*img_length
+        clip_end = start + (i+1)*img_length
+        print("img_clip: " + image_path + f" {clip_start} {clip_end}")
+        image_clip = ImageClip(image_path)
+        image_clip = image_clip.resize((1920, 1080))
+        image_clip = image_clip.set_start(clip_start).set_end(start + (i+1)*img_length)
+        
+        all_clips.append(image_clip)
+    
 
     # create the image clip
-    image_clip = ImageClip(image_path)
+    # image_clip = ImageClip(image_path)
     # image_clip.set_duration(image_duration)
 
     # if 1st frame, then the image covers full width height no matter what
-    if frame_idx == 0:
-        image_clip = image_clip.resize((1920, 1080))
-    else:
-        # each image is a random size between 1/2 and 3/4 of the video
-        image_clip = image_clip.resize((random.randint(1920 // 2, 1920 // 4 * 3), random.randint(1080 // 2, 1080 // 4 * 3)))
+    # image_clip = image_clip.resize((1920, 1080))
+    # if frame_idx == 0:
+    #     image_clip = image_clip.resize((1920, 1080))
+    # else:
+    #     # each image is a random size between 1/2 and 3/4 of the video
+    #     image_clip = image_clip.resize((random.randint(1920 // 2, 1920 // 4 * 3), random.randint(1080 // 2, 1080 // 4 * 3)))
 
-    # text_clip = TextClip(
-    #     block["image_query"], 
-    #     fontsize=112, 
-    #     # font is comic sans
-    #     font="Comic-Sans-MS",
-    #     bg_color='white',
-    #     color='black'
-    # ).set_pos('center').set_duration(image_duration)
-
-    # set the start times
-    
-    image_clip = image_clip.set_start(block["start"]).set_end(block["end"])
-    # text_clip = text_clip.set_start(block["start"]).set_end(block["end"])
-
-    # append the clisp
-    all_clips.append(image_clip)
+    text_clip = TextClip(
+        block["image_query"], 
+        fontsize=91, 
+        # font is comic sans
+        font="Comic-Sans-MS",
+        bg_color='white',
+        color='black'
+    ).set_pos('center')
+    text_clip = text_clip.set_start(block["start"]).set_end(block["end"])
     # all_clips.append(text_clip)
 
     # increment the current time
     current_time = block["end"]
     frame_idx += 1
 
-
-# for file_path in image_files:
-#     image_clip = ImageClip(file_path)
-#     image_clip.set_duration(image_duration)
-
-#     # if 1st frame, then the image covers full width height no matter what
-#     if frame_idx == 0:
-#         image_clip = image_clip.resize((1920, 1080))
-#     else:
-#         # each image is a random size between 1/2 and 3/4 of the video
-#         image_clip = image_clip.resize((random.randint(1920 // 2, 1920 // 4 * 3), random.randint(1080 // 2, 1080 // 4 * 3)))
-
-
-#     # the image filename is of the format {index}_{query}.{ext}
-#     # we want to extract the query and use it as the subtitle
-#     query = file_path.split("_")[1].split(".")[0]
-#     print(f"{current_time // 1}: {query}")
-
-#     text_clip = TextClip(
-#         query, 
-#         fontsize=112, 
-#         # font is comic sans
-#         font="Comic-Sans-MS",
-#         bg_color='white',
-#         color='black'
-#     ).set_pos('center').set_duration(image_duration)
-
-#     # set the start times
-#     image_clip = image_clip.set_start(current_time)
-#     text_clip = text_clip.set_start(current_time)
-
-#     # append the clisp
-#     all_clips.append(image_clip)
-#     all_clips.append(text_clip)
-
-#     # increment the current time
-#     current_time += image_duration
-#     frame_idx += 1
 
 import json
 # now independently load the subtitles in using the data from the transcript
@@ -146,27 +98,59 @@ with open("transcript.json", "r") as f:
 
     print(subtitle_chunks)
 
+    transcript_i = 0
+    transcript_text = transcript["text"]
+
     # now make the text clips
     for i, chunk in enumerate(subtitle_chunks):
         # get the start and end times of the chunk
         start_time = float(chunk[0]["start"])
         end_time = float(chunk[-1]["end"])
 
-        # get the text of the chunk
-        text = " ".join([word["word"] for word in chunk])
+        # get the text of the chunk, including punctuation from the original transcript
+        # accumulate characters into text_buf until all words have been "scanned"
+        text_buf = ""
+        for word in chunk:
+            raw_word = word["word"]
+            
+            # get next index of word
+            j = transcript_i + transcript_text[transcript_i:].index(raw_word) + len(raw_word)
+
+            text_buf += transcript_text[transcript_i:j]
+
+            # peek next char, if it is "." or "!" or "?" then add it to the text_buf
+            if j < len(transcript_text) and transcript_text[j] in [".", ",", "!", "?"]:
+                text_buf += transcript_text[j]
+                j += 1
+
+            print(text_buf)
+            transcript_i = j
+        
+        print(f"sub: {text_buf}")
+
+        # text = " ".join([word["word"] for word in chunk])
 
         # make the text clip
+        START_TIME_PADDING = -0.5  # -1.5
         text_clip = TextClip(
-            text, 
-            fontsize=64, 
+            text_buf, 
+            fontsize=56, 
             # font is some Arial
             font="Arial",
             bg_color='black',
             color='yellow'
-        ).set_pos('bottom').set_start(start_time - 1.5).set_end(end_time - 1.5)
+        ).set_pos('bottom').set_start(start_time + START_TIME_PADDING).set_end(end_time + START_TIME_PADDING).margin(20, color=(0, 0, 0))
 
         # append the text clip
         all_clips.append(text_clip)
+
+# Loop through all clips and dump a "timesheet" of the format
+# <clip_type> <40 char description> <start_time> <end_time>
+# to stdout
+for clip in all_clips:
+    print(f"{clip} {clip.start} {clip.end}")
+
+
 
 # make composite video
 video = CompositeVideoClip(all_clips)
